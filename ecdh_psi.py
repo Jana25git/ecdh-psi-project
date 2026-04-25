@@ -1,70 +1,54 @@
-from __future__ import annotations
-
 import hashlib
 import math
 import secrets
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Set, Tuple
 
-from tinyec import registry
-from tinyec.ec import Point
+from ecdsa import NIST256p
+from ecdsa.ellipticcurve import Point
 
 
-# ============================================================
-# Configuration
-# ============================================================
 
-# You can change the curve if your instructor wants another one.
-CURVE = registry.get_curve("secp384r1")  # strong ECC curve example
-HASH_NAME = "sha384"                     # strong hash example
+CURVE = NIST256p.curve
+G = NIST256p.generator
+n = NIST256p.order  
+HASH_NAME = "sha256" 
 
 
 # ============================================================
 # Utility functions
 # ============================================================
-
 def hash_bytes(data: bytes) -> bytes:
     """Return digest bytes using the selected hash."""
     h = hashlib.new(HASH_NAME)
     h.update(data)
     return h.digest()
 
-
 def hash_text(text: str) -> bytes:
     """Hash a string into bytes."""
     return hash_bytes(text.encode("utf-8"))
 
-
 def hash_to_scalar(text: str, modulus: int) -> int:
-    """
-    Educational shortcut:
-    map text -> scalar in [1, modulus-1].
-
-    Note:
-    This is NOT a full RFC hash-to-curve construction.
-    For a class project prototype, this is often acceptable.
-    """
+    """Map text -> scalar in [1, modulus-1]."""
     value = int.from_bytes(hash_text(text), "big") % modulus
     return value if value != 0 else 1
-
 
 def hash_to_point(text: str) -> Point:
     """
     Map an element x to a curve point H(x) by hashing to a scalar h
     and computing h*G.
     """
-    h = hash_to_scalar(text, CURVE.field.n)
-    return h * CURVE.g
-
+    h = hash_to_scalar(text, n)
+    return h * G
 
 def encode_point(point: Point) -> bytes:
     """
     Serialize a point into bytes for hashing/comparison.
+    (NIST256p uses 32 bytes for coordinates)
     """
-    x_bytes = point.x.to_bytes((point.x.bit_length() + 7) // 8, "big")
-    y_bytes = point.y.to_bytes((point.y.bit_length() + 7) // 8, "big")
-    return b"\x04" + x_bytes + b"|" + y_bytes
-
+    x_bytes = point.x().to_bytes(32, "big")
+    y_bytes = point.y().to_bytes(32, "big")
+    return b"\x04" + x_bytes + y_bytes
 
 def point_commitment(point: Point) -> str:
     """
@@ -72,19 +56,16 @@ def point_commitment(point: Point) -> str:
     """
     return hashlib.new(HASH_NAME, encode_point(point)).hexdigest()
 
-
 def random_private_key() -> int:
     """
     Generate private scalar in [1, n-1].
     """
-    n = CURVE.field.n
     return secrets.randbelow(n - 1) + 1
 
 
 # ============================================================
 # Simple Bloom Filter
 # ============================================================
-
 class BloomFilter:
     def __init__(self, size: int, num_hashes: int) -> None:
         self.size = size
@@ -107,14 +88,12 @@ class BloomFilter:
     def __contains__(self, item: str) -> bool:
         return all(self.bits[pos] == 1 for pos in self._positions(item))
 
-
 def build_bloom_filter(items: Iterable[str], false_positive_rate: float = 0.01) -> BloomFilter:
     items = list(items)
-    n = max(len(items), 1)
+    items_count = max(len(items), 1)
 
-    # Standard Bloom filter formulas
-    m = max(8, int(-(n * math.log(false_positive_rate)) / (math.log(2) ** 2)))
-    k = max(1, int((m / n) * math.log(2)))
+    m = max(8, int(-(items_count * math.log(false_positive_rate)) / (math.log(2) ** 2)))
+    k = max(1, int((m / items_count) * math.log(2)))
 
     bloom = BloomFilter(size=m, num_hashes=k)
     for item in items:
@@ -123,23 +102,32 @@ def build_bloom_filter(items: Iterable[str], false_positive_rate: float = 0.01) 
 
 
 # ============================================================
-# Party model
+# Party model 
 # ============================================================
-
 @dataclass
 class Party:
     name: str
     private_set: Set[str]
     private_key: int
 
+    def _get_blinded_key(self) -> int:
+        """
+        Apply Scalar Blinding to protect against Side-Channel Attacks.
+        k_blind = k + r * n
+        r is a random value > 128 bits (As justified by Schindler & Wiemers)
+        """
+        r = secrets.randbits(130) # عامل عشوائي أكبر من 128 بت
+        return self.private_key + (r * n)
+
     def first_computation(self, items: Iterable[str]) -> Dict[str, Point]:
         """
-        Compute aH(x) or bH(y).
+        Compute aH(x) or bH(y) using the blinded private key.
         """
         result: Dict[str, Point] = {}
+        blinded_key = self._get_blinded_key()
         for item in items:
             Hx = hash_to_point(item)
-            result[item] = self.private_key * Hx
+            result[item] = blinded_key * Hx
         return result
 
     def commitments(self, transformed: Dict[str, Point]) -> Dict[str, str]:
@@ -161,19 +149,18 @@ class Party:
 
     def double_computation(self, received_points: Dict[str, Point]) -> Dict[str, Point]:
         """
-        Compute a(bH(y)) or b(aH(x)).
+        Compute a(bH(y)) or b(aH(x)) using the blinded private key.
         """
-        return {item: self.private_key * pt for item, pt in received_points.items()}
+        blinded_key = self._get_blinded_key()
+        return {item: blinded_key * pt for item, pt in received_points.items()}
 
 
 # ============================================================
 # ECDH-PSI Protocol
 # ============================================================
-
 def ecdh_psi_protocol(set_a: Set[str], set_b: Set[str]) -> Tuple[Set[str], Dict[str, object]]:
     """
     Educational prototype matching your diagram:
-
     1. A builds Bloom filter from S_A and sends it to B.
     2. B filters S_B -> S'_B.
     3. A computes aH(x), x in S_A.
@@ -218,21 +205,18 @@ def ecdh_psi_protocol(set_a: Set[str], set_b: Set[str]) -> Tuple[Set[str], Dict[
     B_double = B.double_computation(A_first)
 
     # Step 9: compare results
-    # Encode points so they can be compared as dictionary keys
     A_double_encoded = {item: encode_point(pt) for item, pt in A_double.items()}
     B_double_encoded = {item: encode_point(pt) for item, pt in B_double.items()}
 
     common_encodings = set(A_double_encoded.values()) & set(B_double_encoded.values())
 
-    # Recover matching elements
     intersection_from_a = {item for item, enc in B_double_encoded.items() if enc in common_encodings}
     intersection_from_b = {item for item, enc in A_double_encoded.items() if enc in common_encodings}
 
-    # For a correct PSI run, both should refer to the same logical shared items
     intersection = intersection_from_a & intersection_from_b
 
     debug_info = {
-        "curve": CURVE.name,
+        "curve": "NIST256p",
         "hash": HASH_NAME,
         "A_private_key": A.private_key,
         "B_private_key": B.private_key,
@@ -253,27 +237,47 @@ def ecdh_psi_protocol(set_a: Set[str], set_b: Set[str]) -> Tuple[Set[str], Dict[
 # ============================================================
 # Example run
 # ============================================================
-
 if __name__ == "__main__":
     S_A = {
-        "alice@example.com",
-        "bob@example.com",
-        "carol@example.com",
-        "dave@example.com",
+        "Waad", "Fahad", "Noura", "Badr", "Amal", "Hanaa", "Adel", "George", 
+        "Reem", "Jihan", "Layal", "Salman", "Haneen", "Khalid", "Sara", 
+        "Jawad", "Ali", "Hasan", "Layan", "Joud", "Sultan", "Majed", 
+        
+        
+        "Jana", "Shahad", "Yousef", "Mohammed", "Omar", "Lina", "Abdulaziz", 
+        "Sarah", "Banan", "Tariq", "Saud", "Nayef", "Ziyad", "Thamer", "Yasser", 
+        "Saleh", "Hussain", "Turki", "Talal", "Sami", "Wael", "Qusai", "Hatem", 
+        "Bassam", "Firas", "Raed", "Moath", "Muhannad", "Nader", "Osama", "Waleed", 
+        "Abeer", "Afnan", "Ahlam", "Alaa", "Amani", "Amina", 
+        "Anfal", "Areej", "Asalah", "Atheer", "Azizah", "Dania", "Dina", "Eman","Fadwa", "Faten", "Ghada", "Hala", "Hanan", "Hind", "Huda"
     }
 
     S_B = {
-        "carol@example.com",
-        "eve@example.com",
-        "bob@example.com",
-        "mallory@example.com",
+        "Waad", "Fahad", "Noura", "Badr", "Amal", "Hanaa", "Adel", "George", 
+        "Reem", "Jihan", "Layal", "Salman", "Haneen", "Khalid", "Sara", 
+        "Jawad", "Ali", "Hasan", "Layan", "Joud", "Sultan", "Majed", 
+       
+        
+        "Asma", "Dana", "Danah", "Refal", "Fay", "Bayan", "Rasha", "Rawan", 
+        "Rema", "Rahaf", "Hala", "Yara", "Lama", "Ghadeer", "Maha", "Samar", 
+        "Abdulrahman", "Nour", "Chayan", "Kamal", "Kayan", "Najwa", "Noha", 
+        "Noud", "Raghad", "Rana", "Rania", "Razan", "Reham", "Ruba", "Saeed", 
+        "Saad", "Mansour", "Mishaal", "Anas", "Tarek", "Ahmad", "Ibrahim", 
+        "Mahmoud", "Mustafa", "Abbas", "Hamza", "Bilal", "Zaid", "Taha", 
+        "Younis", "Idris", "Ayoub", "Yaqoub", "Issa", "Mousa", "Haroun", 
+        "Sulaiman", "Dawoud", "Zakariya", "Yahya", "Ayman", "Amjad", "Anwar", 
+        "Akram", "Ashraf", "Adham", "Iyad", "Bahaa", "Taj", "Jalal", "Jamal", 
+        "Husam", "Hazem", "Diya", "Rabea", "Zahir", "Siraj", "Shafiq", "Safwan","Rakan", "Rayan", "Nawaf","Feras", "Fahd"
     }
 
     intersection, info = ecdh_psi_protocol(S_A, S_B)
 
     print("=== ECDH-PSI Result ===")
     print("Intersection:", intersection)
-    print()
-    print("=== Debug Info ===")
-    for k, v in info.items():
-        print(f"{k}: {v}")
+    print("\n=== Protocol Flow Info ===")
+    print(f"Curve used: {info['curve']}")
+    print(f"Hash used: {info['hash']}")
+    print(f"A's Original Dataset size: {len(info['S_A'])}")
+    print(f"B's Original Dataset size: {len(info['S_B'])}")
+    print(f"B's Dataset size AFTER Bloom Filter: {len(info['S_B_filtered'])}")
+    print(f"Side-Channel Protection: Active (Scalar Blinding > 128 bits)")
