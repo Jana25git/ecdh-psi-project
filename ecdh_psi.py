@@ -1,6 +1,7 @@
 import hashlib
 import math
 import secrets
+import time
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Set, Tuple
 
@@ -269,8 +270,11 @@ if __name__ == "__main__":
         "Akram", "Ashraf", "Adham", "Iyad", "Bahaa", "Taj", "Jalal", "Jamal", 
         "Husam", "Hazem", "Diya", "Rabea", "Zahir", "Siraj", "Shafiq", "Safwan","Rakan", "Rayan", "Nawaf","Feras", "Fahd"
     }
-
+    start_time = time.time()
     intersection, info = ecdh_psi_protocol(S_A, S_B)
+    end_time = time.time()
+    execution_time = end_time - start_time
+
 
     print("=== ECDH-PSI Result ===")
     print("Intersection:", intersection)
@@ -281,3 +285,8 @@ if __name__ == "__main__":
     print(f"B's Original Dataset size: {len(info['S_B'])}")
     print(f"B's Dataset size AFTER Bloom Filter: {len(info['S_B_filtered'])}")
     print(f"Side-Channel Protection: Active (Scalar Blinding > 128 bits)")
+    reduction = (1 - len(info['S_B_filtered']) / len(info['S_B'])) * 100
+    print(f"Bloom Filter Reduction: {reduction:.2f}%")
+    false_positives = len(info['S_B_filtered']) - len(intersection)
+    print(f"False Positives: {false_positives}")
+    print(f"Execution Time: {execution_time:.4f} seconds")
