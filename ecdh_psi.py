@@ -117,8 +117,9 @@ class Party:
         k_blind = k + r * n
         r is a random value > 128 bits (As justified by Schindler & Wiemers)
         """
-        r = secrets.randbits(130) # عامل عشوائي أكبر من 128 بت
+        r = secrets.randbits(130)
         return self.private_key + (r * n)
+        
 
     def first_computation(self, items: Iterable[str]) -> Dict[str, Point]:
         """
@@ -249,8 +250,9 @@ if __name__ == "__main__":
         "Sarah", "Banan", "Tariq", "Saud", "Nayef", "Ziyad", "Thamer", "Yasser", 
         "Saleh", "Hussain", "Turki", "Talal", "Sami", "Wael", "Qusai", "Hatem", 
         "Bassam", "Firas", "Raed", "Moath", "Muhannad", "Nader", "Osama", "Waleed", 
-        "Abeer", "Afnan", "Ahlam", "Alaa", "Amani", "Amina", 
-        "Anfal", "Areej", "Asalah", "Atheer", "Azizah", "Dania", "Dina", "Eman","Fadwa", "Faten", "Ghada", "Hala", "Hanan", "Hind", "Huda"
+        "Abeer", "Afnan", "Ahlam", "Alyaa", "Amani", "Amina", 
+        "Anfal", "Areej", "Asalah", "Atheer", "Azizah", "Dania", "Dina", "Eman","Fadwa",
+          "Faten", "Ghada", "Hala", "Hanan", "Hind", "Huda"
     }
 
     S_B = {
@@ -268,8 +270,10 @@ if __name__ == "__main__":
         "Younis", "Idris", "Ayoub", "Yaqoub", "Issa", "Mousa", "Haroun", 
         "Sulaiman", "Dawoud", "Zakariya", "Yahya", "Ayman", "Amjad", "Anwar", 
         "Akram", "Ashraf", "Adham", "Iyad", "Bahaa", "Taj", "Jalal", "Jamal", 
-        "Husam", "Hazem", "Diya", "Rabea", "Zahir", "Siraj", "Shafiq", "Safwan","Rakan", "Rayan", "Nawaf","Feras", "Fahd"
+        "Husam", "Hazem", "Diya", "Rabea", "Zahir", "Siraj", "Shafiq", "Safwan","Rakan",
+          "Rayan", "Nawaf","Feras", "Fahd"
     }
+
     start_time = time.time()
     intersection, info = ecdh_psi_protocol(S_A, S_B)
     end_time = time.time()
@@ -290,3 +294,8 @@ if __name__ == "__main__":
     false_positives = len(info['S_B_filtered']) - len(intersection)
     print(f"False Positives: {false_positives}")
     print(f"Execution Time: {execution_time:.4f} seconds")
+
+
+    
+
+
