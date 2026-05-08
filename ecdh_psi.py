@@ -1,24 +1,24 @@
-import hashlib
-import math
-import secrets
-import time
-from dataclasses import dataclass
+import hashlib # For hashing and commitments
+import math # For Bloom filter size calculations
+import secrets # For secure random number generation
+import time # For measuring execution time
+from dataclasses import dataclass # For structured party representation
 from typing import Dict, Iterable, List, Set, Tuple
 
+# ECDSA library for elliptic curve operations
 from ecdsa import NIST256p
 from ecdsa.ellipticcurve import Point
 
 
-
+# Parameters
 CURVE = NIST256p.curve
 G = NIST256p.generator
 n = NIST256p.order  
 HASH_NAME = "sha384" 
 
 
-# ============================================================
-# Utility functions
-# ============================================================
+
+# Utility functions for hashing, point encoding, and key generation
 def hash_bytes(data: bytes) -> bytes:
     """Return digest bytes using the selected hash."""
     h = hashlib.new(HASH_NAME)
@@ -64,9 +64,7 @@ def random_private_key() -> int:
     return secrets.randbelow(n - 1) + 1
 
 
-# ============================================================
-# Simple Bloom Filter
-# ============================================================
+# Bloom Filter Implementation
 class BloomFilter:
     def __init__(self, size: int, num_hashes: int) -> None:
         self.size = size
@@ -89,6 +87,7 @@ class BloomFilter:
     def __contains__(self, item: str) -> bool:
         return all(self.bits[pos] == 1 for pos in self._positions(item))
 
+# Build Bloom filter from items with calculated size and hash count based on desired false positive rate.
 def build_bloom_filter(items: Iterable[str], false_positive_rate: float = 0.01) -> BloomFilter:
     items = list(items)
     items_count = max(len(items), 1)
@@ -102,9 +101,7 @@ def build_bloom_filter(items: Iterable[str], false_positive_rate: float = 0.01) 
     return bloom
 
 
-# ============================================================
-# Party model 
-# ============================================================
+# Party model
 @dataclass
 class Party:
     name: str
@@ -157,9 +154,7 @@ class Party:
         return {item: blinded_key * pt for item, pt in received_points.items()}
 
 
-# ============================================================
 # ECDH-PSI Protocol
-# ============================================================
 def ecdh_psi_protocol(set_a: Set[str], set_b: Set[str]) -> Tuple[Set[str], Dict[str, object]]:
     """
     Educational prototype matching your diagram:
@@ -236,10 +231,10 @@ def ecdh_psi_protocol(set_a: Set[str], set_b: Set[str]) -> Tuple[Set[str], Dict[
     return intersection, debug_info
 
 
-# ============================================================
 # Example run
-# ============================================================
 if __name__ == "__main__":
+    
+    # Sample datasets for A and B with some overlap and some unique items.
     S_A = {
         "Waad", "Fahad", "Noura", "Badr", "Amal", "Hanaa", "Adel", "George", 
         "Reem", "Jihan", "Layal", "Salman", "Haneen", "Khalid", "Sara", 
@@ -274,12 +269,13 @@ if __name__ == "__main__":
           "Rayan", "Nawaf","Feras", "Fahd"
     }
 
+    # Measure execution time
     start_time = time.time()
     intersection, info = ecdh_psi_protocol(S_A, S_B)
     end_time = time.time()
     execution_time = end_time - start_time
 
-
+    # Output results and debug info
     print("=== ECDH-PSI Result ===")
     print("Intersection:", intersection)
     print("\n=== Protocol Flow Info ===")
@@ -289,13 +285,14 @@ if __name__ == "__main__":
     print(f"B's Original Dataset size: {len(info['S_B'])}")
     print(f"B's Dataset size AFTER Bloom Filter: {len(info['S_B_filtered'])}")
     print(f"Side-Channel Protection: Active (Scalar Blinding > 128 bits)")
+    # Calculate Bloom filter reduction and false positives
     reduction = (1 - len(info['S_B_filtered']) / len(info['S_B'])) * 100
     print(f"Bloom Filter Reduction: {reduction:.2f}%")
+    # False positives are items in S_B_filtered that are not in the intersection.
     false_positives = len(info['S_B_filtered']) - len(intersection)
     print(f"False Positives: {false_positives}")
     print(f"Execution Time: {execution_time:.4f} seconds")
 
 
     
-
 
