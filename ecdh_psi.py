@@ -13,7 +13,7 @@ from ecdsa.ellipticcurve import Point
 CURVE = NIST256p.curve
 G = NIST256p.generator
 n = NIST256p.order  
-HASH_NAME = "sha256" 
+HASH_NAME = "sha384" 
 
 
 # ============================================================
