@@ -15,7 +15,7 @@ CURVE = NIST256p.curve
 G = NIST256p.generator
 n = NIST256p.order  
 HASH_NAME = "sha384" 
-
+SCALAR_BLINDING = False
 
 
 # Utility functions for hashing, point encoding, and key generation
@@ -75,7 +75,7 @@ class BloomFilter:
         positions = []
         for i in range(self.num_hashes):
             data = f"{i}:{item}".encode("utf-8")
-            digest = hashlib.sha256(data).digest()
+            digest = hashlib.sha384(data).digest()
             pos = int.from_bytes(digest, "big") % self.size
             positions.append(pos)
         return positions
@@ -87,7 +87,7 @@ class BloomFilter:
     def __contains__(self, item: str) -> bool:
         return all(self.bits[pos] == 1 for pos in self._positions(item))
 
-# Build Bloom filter from items with calculated size and hash count based on desired false positive rate.
+# Build Bloom filter from items with calculated size & hash count based on desired false positive rate.
 def build_bloom_filter(items: Iterable[str], false_positive_rate: float = 0.01) -> BloomFilter:
     items = list(items)
     items_count = max(len(items), 1)
@@ -115,7 +115,12 @@ class Party:
         r is a random value > 128 bits (As justified by Schindler & Wiemers)
         """
         r = secrets.randbits(130)
-        return self.private_key + (r * n)
+        
+        if SCALAR_BLINDING:
+         return self.private_key + (r * n)
+        else:
+         return self.private_key
+
         
 
     def first_computation(self, items: Iterable[str]) -> Dict[str, Point]:
@@ -284,7 +289,8 @@ if __name__ == "__main__":
     print(f"A's Original Dataset size: {len(info['S_A'])}")
     print(f"B's Original Dataset size: {len(info['S_B'])}")
     print(f"B's Dataset size AFTER Bloom Filter: {len(info['S_B_filtered'])}")
-    print(f"Side-Channel Protection: Active (Scalar Blinding > 128 bits)")
+    print(f"Side-Channel Protection: {'Active (Scalar Blinding > 128 bits)' if SCALAR_BLINDING else 'Disabled'}")
+    #print(f"Side-Channel Protection: Active (Scalar Blinding > 128 bits)")
     # Calculate Bloom filter reduction and false positives
     reduction = (1 - len(info['S_B_filtered']) / len(info['S_B'])) * 100
     print(f"Bloom Filter Reduction: {reduction:.2f}%")
