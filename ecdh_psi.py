@@ -15,7 +15,7 @@ CURVE = NIST256p.curve
 G = NIST256p.generator
 n = NIST256p.order  
 HASH_NAME = "sha384" 
-SCALAR_BLINDING = False
+SCALAR_BLINDING = True
 
 
 # Utility functions for hashing, point encoding, and key generation
