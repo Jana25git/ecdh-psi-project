@@ -289,8 +289,8 @@ if __name__ == "__main__":
     print(f"A's Original Dataset size: {len(info['S_A'])}")
     print(f"B's Original Dataset size: {len(info['S_B'])}")
     print(f"B's Dataset size AFTER Bloom Filter: {len(info['S_B_filtered'])}")
-    print(f"Side-Channel Protection: {'Active (Scalar Blinding > 128 bits)' if SCALAR_BLINDING else 'Disabled'}")
-    #print(f"Side-Channel Protection: Active (Scalar Blinding > 128 bits)")
+    print(f"Side-Channel Protection: {'Active (Scalar Blinding > 128 bits)'
+                                       if SCALAR_BLINDING else 'Disabled'}")
     # Calculate Bloom filter reduction and false positives
     reduction = (1 - len(info['S_B_filtered']) / len(info['S_B'])) * 100
     print(f"Bloom Filter Reduction: {reduction:.2f}%")
